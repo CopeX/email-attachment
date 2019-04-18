@@ -29,7 +29,7 @@ class TransportBuilder extends \Magento\Framework\Mail\Template\TransportBuilder
      */
     public function addAttachment($content, $fileName, $fileType)
     {
-        $this->message->setBodyAttachment($content, $fileName, $fileType);
+        $this->message->addBodyAttachment($content, $fileName, $fileType);
 
         return $this;
     }
@@ -44,7 +44,7 @@ class TransportBuilder extends \Magento\Framework\Mail\Template\TransportBuilder
     {
         parent::prepareMessage();
 
-        $this->message->setPartsToBody();
+        $this->message->addPartsToBody();
 
         return $this;
     }

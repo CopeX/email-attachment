@@ -17,7 +17,7 @@ use Zend\Mime\PartFactory;
 use Zend\Mail\MessageFactory as MailMessageFactory;
 use Zend\Mime\MessageFactory as MimeMessageFactory;
 
-class Message implements \Magento\Framework\Mail\MailMessageInterface
+class Message extends \Magento\Framework\Mail\Message
 {
     /**
      * @var \Zend\Mime\PartFactory
@@ -37,7 +37,14 @@ class Message implements \Magento\Framework\Mail\MailMessageInterface
     /**
      * @var \Zend\Mime\Part[]
      */
-    protected $parts = [];
+    protected $attachments = [];
+
+    /**
+     * Message type
+     *
+     * @var string
+     */
+    private $messageType = self::TYPE_TEXT;
 
     /**
      * Message constructor.
@@ -54,42 +61,146 @@ class Message implements \Magento\Framework\Mail\MailMessageInterface
         $this->zendMessage->setEncoding($charset);
     }
 
+
     /**
-     * Add the HTML mime part to the message.
+     * {@inheritdoc}
      *
-     * @param string $content
-     * @return $this
+     * @deprecated
+     * @see \Magento\Framework\Mail\Message::setBodyText
+     * @see \Magento\Framework\Mail\Message::setBodyHtml
      */
-    public function setBodyText($content)
+    public function setMessageType($type)
     {
-        $textPart = $this->partFactory->create();
-
-        $textPart->setContent($content)
-            ->setType(Mime::TYPE_TEXT)
-            ->setCharset($this->zendMessage->getEncoding());
-
-        $this->parts[] = $textPart;
-
+        $this->messageType = $type;
         return $this;
     }
 
     /**
-     * Add the text mime part to the message.
+     * {@inheritdoc}
      *
-     * @param string $content
-     * @return $this
+     * @deprecated
+     * @see \Magento\Framework\Mail\Message::setBodyText
+     * @see \Magento\Framework\Mail\Message::setBodyHtml
      */
-    public function setBodyHtml($content)
+    public function setBody($body)
     {
-        $htmlPart = $this->partFactory->create();
-
-        $htmlPart->setContent($content)
-            ->setType(Mime::TYPE_HTML)
-            ->setCharset($this->zendMessage->getEncoding());
-
-        $this->parts[] = $htmlPart;
-
+        if (is_string($body) && $this->messageType === \Magento\Framework\Mail\MailMessageInterface::TYPE_HTML) {
+            $body = $this->createHtmlMimeFromString($body);
+        }
+        $this->zendMessage->setBody($body);
         return $this;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function setSubject($subject)
+    {
+        $this->zendMessage->setSubject($subject);
+        return $this;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getSubject()
+    {
+        return $this->zendMessage->getSubject();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getBody()
+    {
+        return $this->zendMessage->getBody();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function setFrom($fromAddress)
+    {
+        $this->zendMessage->setFrom($fromAddress);
+        return $this;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function addTo($toAddress)
+    {
+        $this->zendMessage->addTo($toAddress);
+        return $this;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function addCc($ccAddress)
+    {
+        $this->zendMessage->addCc($ccAddress);
+        return $this;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function addBcc($bccAddress)
+    {
+        $this->zendMessage->addBcc($bccAddress);
+        return $this;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function setReplyTo($replyToAddress)
+    {
+        $this->zendMessage->setReplyTo($replyToAddress);
+        return $this;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getRawMessage()
+    {
+        return $this->zendMessage->toString();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function setBodyHtml($html)
+    {
+        $this->setMessageType(self::TYPE_HTML);
+        return $this->setBody($html);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function setBodyText($text)
+    {
+        $this->setMessageType(self::TYPE_TEXT);
+        return $this->setBody($text);
+    }
+
+    /**
+     * Create HTML mime message from the string.
+     *
+     * @param string $htmlBody
+     * @return \Zend\Mime\Message
+     */
+    private function createHtmlMimeFromString($htmlBody)
+    {
+        $htmlPart = $this->partFactory->create(["content" => $htmlBody]);
+        $htmlPart->setCharset($this->zendMessage->getEncoding());
+        $htmlPart->setType(Mime::TYPE_HTML);
+        $mimeMessage = $this->mimeMessageFactory->create();
+        $mimeMessage->addPart($htmlPart);
+        return $mimeMessage;
     }
 
     /**
@@ -100,7 +211,7 @@ class Message implements \Magento\Framework\Mail\MailMessageInterface
      * @param string $fileType
      * @return $this
      */
-    public function setBodyAttachment($content, $fileName, $fileType)
+    public function addBodyAttachment($content, $fileName, $fileType)
     {
         $attachmentPart = $this->partFactory->create();
 
@@ -110,7 +221,7 @@ class Message implements \Magento\Framework\Mail\MailMessageInterface
             ->setDisposition(Mime::DISPOSITION_ATTACHMENT)
             ->setEncoding(Mime::ENCODING_BASE64);
 
-        $this->parts[] = $attachmentPart;
+        $this->attachments[] = $attachmentPart;
 
         return $this;
     }
@@ -120,112 +231,15 @@ class Message implements \Magento\Framework\Mail\MailMessageInterface
      *
      * @return $this
      */
-    public function setPartsToBody()
+    public function addPartsToBody()
     {
-        $mimeMessage = $this->mimeMessageFactory->create();
-        $mimeMessage->setParts($this->parts);
-        $this->zendMessage->setBody($mimeMessage);
-
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setBody($body)
-    {
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setSubject($subject)
-    {
-        $this->zendMessage->setSubject($subject);
-
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getSubject()
-    {
-        return $this->zendMessage->getSubject();
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getBody()
-    {
-        return $this->zendMessage->getBody();
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setFrom($fromAddress)
-    {
-        $this->zendMessage->setFrom($fromAddress);
-
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function addTo($toAddress)
-    {
-        $this->zendMessage->addTo($toAddress);
-
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function addCc($ccAddress)
-    {
-        $this->zendMessage->addCc($ccAddress);
-
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function addBcc($bccAddress)
-    {
-        $this->zendMessage->addBcc($bccAddress);
-
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function setReplyTo($replyToAddress)
-    {
-        $this->zendMessage->setReplyTo($replyToAddress);
-
-        return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getRawMessage()
-    {
-        return $this->zendMessage->toString();
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function setMessageType($type)
-    {
+        if ($this->attachments) {
+            $mimeMessage = $this->zendMessage->getBody();
+            foreach ($this->attachments as $attachment) {
+                $mimeMessage->addPart($attachment);
+            }
+            $this->zendMessage->setBody($mimeMessage);
+        }
         return $this;
     }
 }
